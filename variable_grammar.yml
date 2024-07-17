@@ -1,0 +1,697 @@
+taxonomy:
+  - Entity:
+    - NER:
+      - Org
+      - Loc
+      - Per
+    - NP
+    - EngineerOfRecord
+    - Time
+    - Date
+    - CalendarDays
+    - Dollars
+    - Location
+    - CompoundLocation
+    - Project
+    - ProjectName
+    - Organization
+    - SmallDollars
+    - Damages
+    - UponRequest
+    - ProperNoun
+    - Qualifications
+    - Integrator
+    - PreQualification
+    - ContextualConstraint:
+      - PerDay
+      - DamageTrigger
+      - Contractor
+      - Street
+      - Number
+      - Bid
+      - Work
+      - TimeOfCompletion
+      - Cost
+      - Site
+      - Owner
+  - Event:
+    - BidDate
+    - BidTime
+    - BidMove
+    - Duration
+    - EngineersEstimate
+    - ProjectLocation
+    - ProjectNameEvent
+    - ProjectOwner
+  - CrossSentence:
+    - LiquidatedDamages
+    - Coref
+
+# vars:
+#   name_prefix: "local"
+
+rules:
+  - name: "engineer-of-record-1"
+    priority: 1
+    label: EngineerOfRecord
+    type: token
+    keep: true
+    example: "Jeffrey G. Dobrowolski, P.E."
+    pattern: |
+      [word=/[A-Z].*/]+? (?= "," ([word=/^P\.E.*/]|[word=/^RCE*/]))
+
+  - name: "proper-noun"
+    priority: 1
+    label: ProperNoun
+    type: token
+    keep: false
+    example: "XX but not Wednesday, January 9th"
+    pattern: |
+      [tag=NNP] (?![]?[entity=/DATE$/])
+
+
+  - name: "time-1"
+    priority: 1
+    label: Time
+    type: token
+    keep: false
+    example: "2:00 p.m. local time, on October 25, 2023"
+    pattern: | 
+      [word=/^(1[0-2]|0?[1-9]):[0-5][0-9]/] [word=/(?i)(A.?M.?|P.?M.?)/]?
+
+  - name: "time-2"
+    priority: 1
+    label: Time
+    type: token
+    keep: false
+    example: "11AM"
+    pattern: |
+      [word=/(?i)^(1[0-2]|0?[1-9])(A.?M.?|P.?M.?)/]
+
+  - name: "date-1"
+    priority: 1
+    label: Date
+    type: token
+    keep: false
+    example: "October 25, 2023"
+    pattern: | 
+      [tag=NNP]? [word=","]? [tag=NNP]? [word=","]? [word=/^[0-3]?[0-9]$/] [word=","]? [word=/^(19|20)\d{2}$/]
+
+  - name: "date-2"
+    priority: 1
+    label: Date
+    type: token
+    keep: false
+    example: "10/25/2023"
+    pattern: | 
+      [word=/^[0-1]?[0-9]\/[0-3]?[0-9]\/20[0-9]{2}$/]
+
+  - name: "bid"
+    priority: 1
+    label: Bid
+    type: token
+    keep: false
+    example: "Bids"
+    pattern: |
+      [lemma=bid]|[lemma=proposal]
+
+  - name: 'bid-time-event-1'
+    priority: 2
+    label: BidTime
+    pattern: |
+      trigger = [lemma=receive]|[lemma=open]
+      dummy_bid:Bid = (>dobj|>nsubjpass|>nsubj) (>nmod_for)?
+      time:Time = (>nmod_at|>nmod_to)? (>nmod_of)? (>nmod_until|>/^nmod/|>dep)? (>nummod|>compound)?
+
+  - name: 'bid-time-event-2'
+    priority: 2
+    label: BidTime
+    pattern: |
+      trigger = [lemma=receive]|[lemma=open]|[lemma=submit]
+      time:Time = >//*
+  
+  - name: 'bid-date-event-1'
+    priority: 2
+    label: BidDate
+    pattern: |
+      trigger = [lemma=receive]|[lemma=open]
+      dummy_bid:Bid = (>dobj|>nsubjpass|>nsubj) (>nmod_for)?
+      date:Date = (>nmod_at|>nmod_to)? (>nmod_of)? (>nmod_on|>dobj|>dep)
+
+  - name: 'bid-date-event-2'
+    priority: 2
+    label: BidDate
+    pattern: |
+      trigger = [lemma=receive]|[lemma=open]
+      dummy_bid:Bid = (>dobj|>nsubjpass|>nsubj) (>nmod_for)?
+      date:ProperNoun = (>nmod_at|>nmod_to)? (>nmod_of)? (>nmod_on|>dobj|>dep)
+  
+  - name: 'bid-date-event-3'
+    priority: 2
+    label: BidDate
+    pattern: |
+      trigger = [lemma=receive]|[lemma=open]|[lemma=submit]
+      date:Date = >//*
+
+  - name: "bid-move-1"
+    priority: 2
+    label: BidMove 
+    pattern: |
+      trigger = [lemma=move]
+      time:Time = >nmod_at
+      date:Date = >nmod_to
+
+  - name: 'work'
+    priority: 1
+    label: Work
+    type: token
+    keep: false
+    example: "The WORK must be completed"
+    pattern: |
+      [word=/(?i)work/]
+
+  - name: '2-or-3-digit-number'
+    priority: 1
+    label: Number
+    type: token
+    keep: false
+    example: "365"
+    pattern: |
+      /^\d{2,3}$/
+    
+  - name: 'calendar-days'
+    priority: 2
+    label: CalendarDays
+    type: token
+    keep: false
+    pattern: |
+      "("? @Number ")"? []? ([lemma=calendar]|[lemma=work]) [lemma=day]?
+      
+  - name: "completion-days"
+    priority: 2 
+    label: Duration
+    pattern: |
+      trigger = [lemma=completion]
+      count:Number = >nummod
+      
+  - name: 'duration-event-1'
+    priority: 3
+    label: Duration
+    pattern: |
+      trigger = [lemma=complete]|[lemma=prosecute]
+      date:Date = >nmod_by
+      dummy_work:Work = (>nsubjpass|>dobj) 
+
+  - name: 'duration-event-2'
+    priority: 3
+    label: Duration
+    pattern: |
+      trigger = [lemma=allow]
+      duration:CalendarDays = >/nsubj/ 
+      
+  - name: "duration-event-3" 
+    priority: 3 
+    label: Duration 
+    pattern: |
+      trigger = [lemma=complete|lemma=prosecute]
+      duration:CalendarDays = (>/nmod/|>dep) (>/nmod/)? (>/nmod/)? 
+  
+
+  - name: "duration-event-4"
+    priority: 3
+    label: Duration
+    pattern: |
+      trigger = @TimeOfCompletion
+      days:CalendarDays = (<dep|<nsubj)
+
+  - name: 'time-of-completion'
+    priority: 1
+    label: TimeOfCompletion
+    type: token
+    keep: false 
+    pattern: |
+      [lemma=time] []? ([lemma=for]|[lemma=of]) [lemma=completion]
+
+  - name: "estimated-cost"
+    label: Cost 
+    priority: 1
+    type: token
+    keep: false
+    example: "estimated cost"
+    pattern: |
+      [lemma=estimate] []? [lemma=cost]
+  
+  - name: "estimate-opinion"
+    label: Cost
+    priority: 1 
+    type: token
+    keep: false
+    example: "engineers opinion"
+    pattern: |
+      ([lemma=engineer]|[lemma=budget]) [tag=POS]* []? ([lemma=opinion]|[lemma=estimate])
+  
+  - name: "5-8-digit-dollar"
+    label: Dollars
+    priority: 1
+    type: token
+    keep: false
+    example: "$1,000,000"
+    pattern: |
+      [tag=$] /\d{1,3},*\d{3},*(\d{3})*/
+    
+  - name: "engineers-estimate"
+    label: EngineersEstimate 
+    priority: 2
+    pattern: |
+      trigger = @Cost
+      dollars:Dollars = (<nsubj|>nmod_of|>advcl)
+
+  - name: "upon-request"
+    label: UponRequest 
+    priority: 1
+    type: token
+    keep: false
+    example: "upon request"
+    pattern: |
+      [lemma=upon]? [lemma=request]
+
+  - name: "engineers-estimate-request"
+    label: EngineersEstimate 
+    priority: 2 
+    example: The engineer's estimate is available upon request
+    pattern: |
+      trigger = @Cost
+      request:UponRequest = <nsubj >/nmod/
+
+  - name: "street"
+    label: Street
+    type: token
+    keep: false
+    priority: 1
+    example: "Avenue Street Ave"
+    pattern: |
+      [lemma=street] | [lemma=st] | [lemma=avenue] | [lemma=ave] | [lemma=road] |
+      [lemma=rd] | [lemma=boulevard] | [lemma=blvd] |  [lemma=way] |  [lemma=way] |
+      [lemma=highway] |  [lemma=hwy] 
+
+  - name: "site-1"
+    label: Site
+    priority: 1 
+    type: token
+    keep: false
+    example: "project site tour"
+    pattern: |
+      [lemma=project]? [lemma=site] [lemma=tour]? [lemma=inspection]? | [lemma=project] | [lemma=location] | [lemma=walk]
+
+  - name: "site-2"
+    label: Site
+    priority: 1
+    type: token
+    keep: false 
+    example: "Site of work"
+    pattern: |
+      [word=/(?i)site/] (of)? (the)? [word=/(?i)work/]
+      
+  - name: "location-ner-1"
+    label: Location 
+    priority: 1
+    type: token
+    keep: false
+    example: Fresno County, 94123
+    pattern: |
+      [tag=CD]* [entity=B-LOC] [entity=I-LOC]* [tag=","]* [tag=CD]* 
+
+  - name: "location-ner-2"
+    label: Location 
+    priority: 1
+    keep: false
+    type: token
+    example: "251 Patterson Ave, Fresno CA, 85711"
+    pattern: |
+      [tag=CD]? [tag=NNP]{0,2}? [tag=","]? [entity=B-LOC] [entity=I-LOC]* [tag=","]? [tag="."]? [tag=CD]* 
+
+  - name: "location-ner-3"
+    label: Location
+    priority: 1
+    keep: false
+    type: token
+    example: "District of Tranquility"
+    pattern: |
+      [tag=NNP] [chunk=B-PP] [tag=DT]? [entity=B-LOC] [entity=I-LOC]* 
+
+  - name: "location-intersection-tag"
+    label: Location
+    priority: 2
+    keep: false
+    type: token
+    example: "NORTH AND GREENWOOD AVENUES SEWER LIFT STATION"
+    pattern: |
+      [tag=NNP] @Street? [tag=CC] [tag=NNP] @Street [chunk=/NP$/]+
+
+  - name: "intersection-location-1"
+    label: CompoundLocation
+    type: token
+    priority: 2 
+    keep: false
+    example: "S. Bethel Road and Manning Ave"
+    pattern: |
+      @Location and (@Location | [tag=NNP]{1,2})
+    
+  - name: "compound-location"
+    label: CompoundLocation
+    priority: 3
+    keep: false
+    type: token
+    example: "1234 Main Avenue in the District of Tranquility"
+    pattern: |
+      (?<![entity=B-LOC]) @Location [lemma=in]? [lemma=the]? @Location+ 
+
+  - name: "compound-compound-location"
+    label: CompoundLocation
+    type: token
+    priority: 3
+    keep: false
+    example: "Lincoln Avenue and Silveria Avenue in the District of Tranquility, County of Fresno, California"
+    pattern: |
+      @CompoundLocation [tag=in] [tag=DT] @CompoundLocation+
+    
+  - name: "compund-location-ner"
+    label: CompoundLocation
+    type: token
+    priority: 3
+    keep: false
+    example: "Yolo County Central Landfill"
+    pattern: |
+      [entity=B-LOC] [entity=I-LOC] [entity=I-LOC] [entity=I-LOC]+
+
+  # This may need to be narrower. It grabs bid-location sometimes and could get a number of things on a larger doc.
+  - name: "project-location-1"
+    label: ProjectLocation
+    priority: 4
+    pattern: |
+      trigger = [lemma=locate & tag=/^V/] | [lemma=hold]
+      dummy_work:Work = >/nsubj/
+      location:CompoundLocation = >/nmod/* >appos*
+
+  - name: "project-location-2"
+    label: ProjectLocation
+    priority: 4
+    pattern: |
+      trigger = [lemma=hold]|[lemma=locate]
+      dummy_site:Site = <acl? >/nsubj/
+      location:CompoundLocation = >/nmod/* >appos*
+
+  - name: "project-location-3"
+    label: ProjectLocation
+    priority: 4
+    example: "the project site located on S. Bethel road at the intersection of S. Bethel Road and Manning Ave"
+    pattern: |
+      trigger = @Site 
+      location:CompoundLocation = >/^adv/? >/^nmod/* >/^a/? >/^nmod/*
+  
+  - name: "project-name-ner-1"
+    label: ProjectName
+    type: token
+    priority: 1
+    example: "Project Name: Irrigation & Pump Station Upgrade Project"
+    pattern: |
+      (?<=([lemma=project] [lemma=name]? [lemma=identification]? [lemma=":"])) [entity=B-ORG] [entity=I-ORG]+
+  
+  - name: "project-name-ner-2"
+    label: ProjectName
+    type: token
+    priority: 1
+    example: "PID MAIN CANAL REHABILITATION PROJECT"
+    pattern: |
+      (?<=([word=PID]|[lemma=project] [lemma=":"])) [chunk=/NP$/]+ ([lemma=project] | [lemma=improvement] | [lemma=rehabilitation] | [lemma=expansion])
+
+  - name: "project"
+    label: Project
+    type: token
+    priority: 1
+    keep: false
+    example: "Well 22 GAC Treatment Project"
+    pattern: |
+      (([lemma=city] | [lemma=town] | [lemma=district] | [lemma=county]) [lemma=of])?  [chunk=/NP$/]+ ([lemma=project] | [lemma=improvement] | [lemma=rehabilitation] | [lemma=expansion])
+  
+  - name: "project-name-surface-1" 
+    label: ProjectName
+    type: token
+    priority: 3
+    example: "project: NORTH AND GREENWOOD AVENUES SEWER LIFT"
+    pattern: |
+      (?<=([lemma=project] [lemma=name]? [lemma=identification]? [lemma=":"])) @Location
+  
+  # this may overmatch, but the language is very specific and seems to only be used in project titles
+  - name: "project-name-surface-2"
+    label: ProjectName
+    type: token
+    priority: 3
+    example: "FOR THE CONSTRUCTION OF THE 2023 GRO UNDWATER EXTRACTION WELLS" 
+    pattern: |
+      (?<=([lemma=for] [lemma=the] [lemma=construction] [lemma=of] [lemma=":"]? ))  (@Project | [chunk=/NP$/]+)
+
+  - name: "project-name-syntax-1"
+    label: ProjectNameEvent
+    priority: 3
+    example: "To include Plans titled: WELL 22 GAC TREATMENT PROJECT"
+    pattern: |
+      trigger = [lemma=title]
+      project:Project = >dep | >dobj? >compound
+  
+  - name: "org-ner-basic"
+    label: Organization
+    type: token
+    priority: 1
+    keep: false
+    example: "Placer County Water Agency"
+    pattern: |
+      [entity=B-ORG] [entity=I-ORG]* [tag=NNP]?
+
+  - name: "org-surface-1"
+    label: Organization
+    type: token
+    priority: 1
+    keep: false
+    example: "Town of Windsor | County of Yolo | University of Arizona"
+    pattern: |
+      ([lemma=city]|[lemma=town]|[lemma=university]|[lemma=county]) [lemma=of] [tag=NNP]
+  
+  - name: "org-surface-2"
+    label: Organization
+    type: token
+    priority: 1 
+    keep: false
+    example: "Tranquility Public Utility Districty | Yolo County"
+    pattern: |
+      [tag=NNP]{1,3} ([lemma=district]|[lemma=county]|[lemma=university])
+
+  - name: "owner-surface"
+    label: Owner 
+    type: token 
+    priority: 1 
+    keep: false 
+    example: "owner"
+    pattern: |
+      [lemma=owner]
+
+  - name: "owner-event-1"
+    label: ProjectOwner
+    priority: 2
+    example: "Placer County Water Agency, hereafter referred to as Owner"
+    pattern: |
+      trigger = [lemma=refer] | [lemma=call]
+      dummy_owner:Owner = >/nmod/ >compound* | >xcomp
+      project_owner:Organization = <acl <appos? | >/nsubj/ >dep?
+  
+  - name: "owner-surface-1"
+    label: ProjectOwner
+    type: token
+    priority: 2
+    example: "To: San Jose Water (Owner)"
+    pattern: |
+      @Organization (?=( []{0,6} "(" []? [lemma=owner] []? ")"))
+
+  - name: "owner-event-2"
+    label: ProjectOwner
+    priority: 3
+    example: "The Malaga County Water District is soliciting bids for ... "
+    pattern: |
+      trigger = [lemma=solicit] | [lemma=accept]
+      dummy_bid:Bid = >dobj 
+      project_owner:Organization = >nsubj
+
+  - name: "owner-surface-2"
+    label: ProjectOwner
+    type: token
+    priority: 2 
+    example: "FOR THE: CITY OF PARLIER (CITY)"
+    pattern: |
+      @Organization (?= ("(" ([lemma=city]|[lemma=county]|[lemma=town]) ")") )
+  
+  - name: "owner-surface-3"
+    label: ProjectOwner
+    type: token
+    priority: 2
+    example: "Tranquility Public Utility District, hereinafter reffered to as owner"
+    pattern: |
+      @Organization (?=([]{0,3} ([lemma=refer]|[lemma=call]) []{0,3} @Owner))
+
+  - name: "owner-surface-4" 
+    label: ProjectOwner
+    type: token
+    priority: 2
+    example: "Owner: Town of Windsor"
+    pattern: |
+      (?<=(@Owner [lemma=name]? [lemma=identification]? [lemma=":"])) @Organization
+
+  - name: "owner-surface-5"
+    label: ProjectOwner
+    type: token
+    priority: 2
+    example: "To: San Jose Water (Owner)"
+    pattern: |
+      [tag=NNP]+ (?= ("(" []? [lemma=owner] []? ")"))
+
+  - name: "liquidated-damages-trigger"
+    label: DamageTrigger
+    priority: 1 
+    type: token
+    keep: false
+    example: "Liquidated Damages"
+    pattern: |
+      [lemma=liquidate] ([lemma=damages]|[lemma=damage])
+
+  - name: "contractor-surface"
+    label: Contractor 
+    priority: 1
+    type: token 
+    keep: false
+    pattern: | 
+      [lemma=contractor]
+
+  - name: "damage-dollars"
+    label: SmallDollars 
+    priority: 1
+    type: token 
+    keep: false
+    example: "$150 / $2,500"
+    pattern: | 
+      [tag=$] /\d{1,3},*(\d{1,3})*,*(\d{3})*(.00)?/
+
+  - name: "per-day"
+    label: PerDay
+    priority: 1
+    type: token
+    keep: false
+    example: "per day for each calendar day"
+    pattern: |
+      ([lemma=per]|[lemma=for]) []{0,4} [lemma=day]
+
+  - name: "liquid-damages-surface-1"
+    label: LiquidatedDamages
+    priority: 2
+    type: token
+    example: "The Contractors shall pay to the City of Ceres the sum of $2,500.00 per day, for each and every calendar day's delay in finishing the work in excess of the number of working days prescribed above."
+    pattern: |
+      [tag=DT]? @Contractor []*? [lemma=pay] []*? @SmallDollars []*? @PerDay []*$
+
+  - name: "liquid-damages-surface-2"
+    label: LiquidatedDamages
+    priority: 2
+    type: token
+    example: "Liquid Damages shall be $2500 per day . . . "
+    pattern: |
+      [tag=DT]? @DamageTrigger []*? [lemma=be] []*? @SmallDollars []*? @PerDay []*$
+
+  - name: "mcc-integrator"
+    label: Integrator
+    priority: 1
+    type: token
+    example: "2.07 MCC INTEGRATOR/SUPPLIER"
+    pattern: |
+      [word=MCC] [lemma=integrator] 
+
+  - name: "qualifications-surface"
+    label: Qualifications
+    priority: 1
+    type: token
+    example: "1.04 QUALIFICATIONS"
+    pattern: |
+      [tag=CD] ([lemma=supplier] []? []?)? [lemma=qualification]
+
+  - name: "prequalification-rating"
+    label: PreQualification
+    priority: 1 
+    type: token
+    example: "b. Prequalification Rating"
+    pattern: |
+      [lemma=prequalification] [lemma=rate]
+
+  - name: "quality-assurance"
+    label: Qualifications
+    priority: 1
+    type: token
+    example: 1.04 QUALITY ASSURANCE
+    pattern: |
+      [tag=CD]? [lemma=quality] [lemma=assurance]
+
+  - name: "org-ner"
+    label: Org
+    priority: 1
+    type: token
+    keep: false
+    pattern: |
+      [entity=/ORG/]+
+
+  - name: "loc-ner"
+    label: Loc
+    priority: 1
+    type: token
+    keep: false
+    pattern: |
+      [entity=/LOC/]
+
+  - name: "per-ner"
+    label: Per
+    priority: 1
+    type: token
+    keep: false
+    pattern: |
+      [entity=/PER/]+ | [tag=PRP]
+  
+  - name: "noun-phrase"
+    label: NP
+    type: token
+    keep: false
+    pattern: |
+      [chunk=/NP$/]+
+
+  - name: "engineer-of-record-surface-2"
+    label: EngineerOfRecord
+    priority: 2
+    type: token
+    example: "Name of Engineer: Joe Kelly"
+    pattern: |
+      (?<=([lemma=name]? [lemma=of]? [lemma=city]? [lemma=engineer] [word=":"]?)) @Per
+      
+  - name: "engineer-of-record-surface-3"
+    label: EngineerOfRecord
+    priority: 2
+    type: token
+    pattern: |
+      (?<=([lemma=engineer] []*? [lemma=project] [lemma=be]?)) @NP
+
+  - name: "engineer-of-record-event-1"
+    label: EngineerOfRecord
+    priority: 2 
+    pattern: |
+      trigger = [lemma=engineer]
+      EoR:Org = </nsubj/ >/nmod/*
+
+  - name: "engineer-of-record-surface-4"
+    label: EngineerOfRecord
+    priority: 2
+    type: token
+    pattern: |
+      @Per (?!([]*? @Per)) (?= []*? ","?  ([word=/^P\.E.*/]|[word=/^RCE*/]))

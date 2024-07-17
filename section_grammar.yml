@@ -1,0 +1,30 @@
+# section grammar
+rules:
+  - name: "addenda-surface"
+    label: Addenda
+    type: token
+    example: "addenda"
+    pattern: |
+      [lemma=/addenda.*/]|[lemma=addendum]
+
+  - name: "qualifications-surface-1"
+    label: Qualifications
+    type: token
+    example: "Instrumentation"
+    pattern: |
+      [lemma=instrumentation]
+
+  - name: "qualifications-surface-2"
+    label: Qualifications
+    type: token
+    example: "PLC CONTROL"
+    pattern: |
+      [word=PLC]
+
+  - name: "qualifications-surface-3"
+    label: Qualifications
+    type: token
+    example: "CONTROL PANEL"
+    pattern: |
+      [lemma=control] []*? [lemma=panel]
+
