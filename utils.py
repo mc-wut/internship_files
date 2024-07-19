@@ -17,6 +17,7 @@ from lum.clu.odin.mention import (
 )
 import httpx
 import typing
+import json
 
 __all__ = ["WMLUtils"]
 
@@ -62,32 +63,37 @@ class WMLUtils:
     def filter_extractions(
         extractions: list[schema.Extraction],
     ) -> list[schema.Extraction]:
-        # FIXME implement filters for duplicate extractions
+        """Sorts out extractions with special filtering criteria (duration), and
+        calls text cleaning and duplicate filtering methods
+        """
         print(f"Received {len(extractions)}")
-        is_duration_extraction = lambda ex: (
-            ex.variable == schema.ExtractionVariable.PROJECT_DURATION
-            or ex.variable == schema.ExtractionVariable.ADDENDA_PROJECT_DURATION
-        )
-        measure_duration = lambda ex: (float("".join(filter(str.isdigit, ex.value))))
-        max_duration = (-1, None)
-        other = []
+        durations = []
+        addenda_durations = []
+        filtered_extractions = []
         for extraction in extractions:
             # Clean values
-            extraction.value = WMLUtils.postprocess_evidence(extraction.value)
-            # Clean Context\
+            extraction.value = WMLUtils._postprocess_evidence(extraction.value)
+            # Clean context
             if extraction.eicontext != None:
-                extraction.eicontext = WMLUtils.postprocess_evidence(
+                extraction.eicontext = WMLUtils._postprocess_evidence(
                     extraction.eicontext
                 )
-            # Filter Project Duration extractions
-            if is_duration_extraction(extraction):
-                n = measure_duration(extraction)
-                if n > max_duration[0]:
-                    max_duration = (n, extraction)
+            # Sort out Project Duration extractions
+            if extraction.variable == schema.ExtractionVariable.PROJECT_DURATION:
+                durations.append(extraction)
+            elif (
+                extraction.variable
+                == schema.ExtractionVariable.ADDENDA_PROJECT_DURATION
+            ):
+                addenda_durations.append(extraction)
             else:
-                other.append(extraction)
-        longest: float = max_duration[-1]
-        return other + [longest] if longest is not None else other
+                filtered_extractions.append(extraction)
+        # Filter for longest Project Duration and Addenda Duration
+        if durations:
+            filtered_extractions.append(WMLUtils._duration_filter(durations))
+        if addenda_durations:
+            filtered_extractions.append(WMLUtils._duration_filter(addenda_durations))
+        return WMLUtils._filter_duplicate_extractions(filtered_extractions)
 
     @staticmethod
     def filter_mentions_with_metadata(
@@ -143,6 +149,34 @@ class WMLUtils:
         return m.document.text[startoffset:endoffset]
 
     @staticmethod
-    def postprocess_evidence(context: str) -> str:
+    def _postprocess_evidence(context: str) -> str:
         """Filters problematic characters (newlines for now) out of context field"""
         return context.replace("\n", " ")
+
+    @staticmethod
+    def _filter_duplicate_extractions(
+        unfiltered_extractions: list[schema.Extraction],
+    ) -> list[schema.Extraction]:
+        """Removes duplicate extractions"""
+        # Filter for duplicate extractions
+        filtered_extractions = []
+        variable_value_pairs = set()
+        for ex in unfiltered_extractions:
+            if (ex.variable, ex.value) not in variable_value_pairs:
+                variable_value_pairs.add((ex.variable, ex.value))
+                filtered_extractions.append(ex)
+        return filtered_extractions
+
+    @staticmethod
+    def _duration_filter(
+        extractions: list[schema.Extraction],
+    ) -> list[schema.Extraction]:
+        """Returns the longest duration extraction"""
+        measure_duration = lambda ex: (float("".join(filter(str.isdigit, ex.value))))
+        max_duration = (-1, None)
+        for ex in extractions:
+            n = measure_duration(ex)
+            if n > max_duration[0]:
+                max_duration = (n, ex)
+        longest: schema.Extraction = max_duration[-1]
+        return longest
